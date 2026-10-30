@@ -4,7 +4,7 @@ test('correct, one-away, and unrelated guesses',()=>{const p=puzzles[0].groups;a
 test('schedule is deterministic and exhausts pool before repeating',()=>{const ids=Array.from({length:puzzles.length},(_,i)=>schedule(puzzles,20000+i).id);assert.equal(new Set(ids).size,puzzles.length);assert.equal(schedule(puzzles,20000).id,schedule(puzzles,20000+puzzles.length).id);assert.equal(schedule(puzzles,20001).id,schedule(puzzles,20001).id)});
 test('UTC rollover is independent of local timezone',()=>{assert.equal(dayNumber(new Date('2026-10-29T23:59:59Z')),20755);assert.equal(dayNumber(new Date('2026-10-30T00:00:00Z')),20756)});
 test('achievements follow correct solve order',()=>{const p=puzzles[0].groups;assert.deepEqual(achievement(p,[3,2,1,0]),{hardestFirst:true,descending:true});assert.deepEqual(achievement(p,[3,0,1,2]),{hardestFirst:true,descending:false});assert.deepEqual(achievement(p,[0,3]),{hardestFirst:false,descending:false})});
-test('completed games count once and modes remain independent',()=>{const p=puzzles[0].groups, s={solved:[3,2,1,0],strikes:2};let stats=record({},'daily','today',p,s);stats=record(stats,'daily','today',p,s);stats=record(stats,'practice','session',p,{solved:[3],strikes:0});assert.deepEqual(totals(stats.daily),{played:1,won:1,hardestFirst:1,descending:1});assert.deepEqual(totals(stats.practice),{played:1,won:0,hardestFirst:1,descending:0});assert.deepEqual(record({},'daily','unfinished',p,{solved:[3],strikes:1}),{})});
+test('completed games count once and modes remain independent',()=>{const p=puzzles[0].groups, s={solved:[3,2,1,0],strikes:2};let stats=record({},'daily','today',p,s);stats=record(stats,'daily','today',p,s);stats=record(stats,'practice','session',p,{solved:[3],strikes:0});assert.deepEqual(totals(stats.daily),{played:1,won:1,hardestFirst:1,descending:1,noMistakes:0,unknownNoMistakes:0});assert.deepEqual(totals(stats.practice),{played:1,won:0,hardestFirst:1,descending:0,noMistakes:0,unknownNoMistakes:0});assert.deepEqual(record({},'daily','unfinished',p,{solved:[3],strikes:1}),{})});
 test('shuffle preserves entries and input',()=>{const a=[1,2,3,4],b=shuffle(a,()=>0);assert.deepEqual(a,[1,2,3,4]);assert.deepEqual([...b].sort(),a)});
 test('boards do not reuse substantially identical groups',()=>{for(let i=0;i<puzzles.length;i++)for(let j=0;j<i;j++)for(const a of puzzles[i].groups)for(const b of puzzles[j].groups)assert.ok(a.words.filter(w=>b.words.includes(w)).length<3,`${puzzles[i].id} / ${puzzles[j].id}: ${a.name} / ${b.name}`)});
 test('legacy daily schedule remains stable when practice boards are added',()=>{for(let day=20755;day<20762;day++)assert.equal(schedule(puzzles.slice(0,7),day).id,schedule(puzzles.filter(p=>Number(p.id.slice(-3))<=7),day).id)});
@@ -18,3 +18,20 @@ test('guess history retains outcomes and recognizes reordered repeats',()=>{cons
 test('legacy saved signatures reconstruct history without losing duplicate detection',()=>{const groups=puzzles[0].groups,words=[...groups[0].words.slice(0,3),groups[1].words[0]],signature=[...words].sort().join('|');const history=normalizeHistory([signature],groups);assert.equal(history[0].outcome,'one-away');assert.equal(hasGuess(history,words),true);assert.deepEqual(normalizeHistory(history,groups),history);});
 
 test('last guess feedback survives serialization and clears on a correct guess',()=>{const history=[{words:['A','B','C','D'],outcome:'incorrect'}];assert.deepEqual(lastGuessFeedback(JSON.parse(JSON.stringify(history))),history[0]);history.push({words:['E','F','G','H'],outcome:'one-away'});assert.deepEqual(lastGuessFeedback(history),history[1]);history.push({words:['I','J','K','L'],outcome:'correct'});assert.equal(lastGuessFeedback(history),null);assert.equal(lastGuessFeedback([]),null);assert.equal(lastGuessFeedback([{words:['A'],outcome:'unknown'}]),null);});
+
+test('no-mistake wins count once, separately, and migrate only known completed saves',()=>{
+ const groups=puzzles[0].groups, clean={solved:[0,1,2,3],strikes:4}, mistake={solved:[0,1,2,3],strikes:3};
+ let stats=record({},'daily','day',groups,clean);
+ stats=record(JSON.parse(JSON.stringify(stats)),'daily','day',groups,clean);
+ stats=record(stats,'practice','clean',groups,clean);
+ stats=record(stats,'practice','mistake',groups,mistake);
+ stats=record(stats,'practice','loss',groups,{solved:[0],strikes:0});
+ assert.equal(totals(stats.daily).noMistakes,1); assert.equal(totals(stats.practice).noMistakes,1);
+ const old={daily:{known:{won:true,hardestFirst:false,descending:false},unknown:{won:true},lost:{won:false}},practice:{}};
+ assert.equal(totals(old.daily).unknownNoMistakes,2);
+ const migrated=record(old,'daily','known',groups,clean);
+ assert.equal(totals(migrated.daily).noMistakes,1); assert.equal(totals(migrated.daily).unknownNoMistakes,1);
+ assert.equal(old.daily.known.noMistakes,undefined);
+ assert.deepEqual(record(migrated,'daily','known',groups,mistake),migrated);
+ assert.equal(totals(record(old,'daily','unknown',groups,{solved:[0,1,2,3]}).daily).unknownNoMistakes,2);
+});

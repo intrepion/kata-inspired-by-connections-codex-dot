@@ -15,8 +15,24 @@ export function dailyStorageKey(prefix, day) {
 }
 export function validate(puzzles) { const ids=new Set(), boards=new Set(); return puzzles.every(p=>{const groups=p.groups, words=groups.flatMap(g=>g.words), signature=[...words].sort().join('|');if(ids.has(p.id)||boards.has(signature))return false;ids.add(p.id);boards.add(signature);return groups.length===4 && groups.every(g=>g.name && g.words.length===4 && g.words.every(w=>typeof w==='string' && w.trim()===w && w.length>0)) && new Set(words).size===16 && [...groups.map(g=>g.rank)].sort().join(',')==='1,2,3,4';}); }
 export function achievement(groups, solved) { const ranks=solved.map(i=>groups[i].rank); return {hardestFirst:ranks[0]===4,descending:ranks.join(',')==='4,3,2,1'}; }
-export function record(stats, mode, id, groups, state) { if(state.solved.length!==4 && state.strikes>0) return stats; const next=structuredClone(stats); next[mode] ??= {}; if(next[mode][id])return next; next[mode][id]={won:state.solved.length===4,...achievement(groups,state.solved)}; return next; }
-export function totals(records={}) { const values=Object.values(records); return {played:values.length,won:values.filter(x=>x.won).length,hardestFirst:values.filter(x=>x.hardestFirst).length,descending:values.filter(x=>x.descending).length}; }
+export function record(stats, mode, id, groups, state) {
+  if(state.solved.length!==4 && state.strikes>0) return stats;
+  const next=structuredClone(stats); next[mode] ??= {};
+  const existing=next[mode][id];
+  // A saved completed game can fill in a missing historical result; older
+  // aggregate records alone do not contain enough information to infer it.
+  if(existing) {
+    if(existing.won && existing.noMistakes === undefined && state.solved.length===4 && Number.isInteger(state.strikes) && state.strikes>=0 && state.strikes<=4) existing.noMistakes=state.strikes===4;
+    return next;
+  }
+  const won=state.solved.length===4;
+  next[mode][id]={won,...achievement(groups,state.solved),noMistakes:won && state.strikes===4};
+  return next;
+}
+export function totals(records={}) {
+  const values=Object.values(records);
+  return {played:values.length,won:values.filter(x=>x.won).length,hardestFirst:values.filter(x=>x.hardestFirst).length,descending:values.filter(x=>x.descending).length,noMistakes:values.filter(x=>x.won && x.noMistakes===true).length,unknownNoMistakes:values.filter(x=>x.won && typeof x.noMistakes!=='boolean').length};
+}
 
 // Notes are independent hypotheses; migrate the earlier single-color format on read.
 export const NOTE_COLORS = ['yellow','green','blue','purple'];
