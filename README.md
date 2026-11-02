@@ -21,3 +21,7 @@ Progress and statistics are stored in the browser. The new schedule uses separat
 Run `npm test` with Node.js. No dependencies or build step are needed. The Pages workflow is ready for GitHub Actions when publishing is approved and Pages is configured. This project is independent and is not affiliated with The New York Times.
 
 MIT license; see [LICENSE](LICENSE).
+
+## Arcade metadata
+
+See [docs/arcade-metadata.md](docs/arcade-metadata.md) for the game-owned manifest and screenshot provenance.
